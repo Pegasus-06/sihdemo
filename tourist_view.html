@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tourist Safety App</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'Roboto Mono', monospace; }
+        @keyframes pulse-red-bg {
+            0% { background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { background-color: #dc2626; box-shadow: 0 0 0 40px rgba(239, 68, 68, 0); }
+            100% { background-color: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .sos-button {
+            animation: pulse-red-bg 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 flex items-center justify-center h-screen p-4">
+
+    <div id="loading-state" class="text-center text-gray-500">
+        <i class="fas fa-spinner fa-spin text-4xl"></i>
+        <p class="mt-2">Fetching your secure ID...</p>
+    </div>
+
+    <main id="app-content" class="hidden w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 space-y-6">
+        <header class="text-center">
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Verifiable Tourist ID</h1>
+            <p id="ticketId-display" class="mono text-cyan-500 dark:text-cyan-400"></p>
+        </header>
+
+        <section id="tourist-details" class="space-y-2 text-sm">
+            </section>
+
+        <section>
+            <button id="sos-btn" class="w-full text-white font-bold text-2xl py-8 rounded-full shadow-lg transition-transform transform hover:scale-105 sos-button">
+                <i class="fas fa-exclamation-triangle"></i> SOS
+            </button>
+        </section>
+
+        <footer class="text-center text-xs text-gray-400 dark:text-gray-500 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <p>Your location is securely monitored for safety.</p>
+        </footer>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingState = document.getElementById('loading-state');
+            const appContent = document.getElementById('app-content');
+            const ticketIdDisplay = document.getElementById('ticketId-display');
+            const touristDetailsDiv = document.getElementById('tourist-details');
+            const sosBtn = document.getElementById('sos-btn');
+
+            const params = new URLSearchParams(window.location.search);
+            const ticketId = params.get('ticketId');
+
+            if (!ticketId) {
+                loadingState.innerHTML = '<p class="text-red-500">Error: No Verifiable ID found in URL.</p>';
+                return;
+            }
+
+            // Retrieve the blockchain from localStorage
+            const chainData = JSON.parse(localStorage.getItem('touristChain') || '[]');
+            const touristBlock = chainData.find(block => block.data.ticketId === ticketId);
+
+            if (!touristBlock) {
+                loadingState.innerHTML = '<p class="text-red-500">Error: Verifiable ID is invalid or not found.</p>';
+                return;
+            }
+
+            // Populate the UI
+            const tourist = touristBlock.data;
+            ticketIdDisplay.textContent = tourist.ticketId;
+            touristDetailsDiv.innerHTML = `
+                <div class="flex justify-between"><span class="font-semibold text-gray-600 dark:text-gray-400">Name:</span> <span>${tourist.tourist}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-600 dark:text-gray-400">Nationality:</span> <span>${tourist.nationality}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-600 dark:text-gray-400">Blood Group:</span> <span>${tourist.bloodGroup}</span></div>
+                <div class="flex justify-between"><span class="font-semibold text-gray-600 dark:text-gray-400">Emergency Contact:</span> <span>${tourist.emergencyContact}</span></div>
+            `;
+            
+            loadingState.classList.add('hidden');
+            appContent.classList.remove('hidden');
+            
+            sosBtn.addEventListener('click', () => {
+                if (confirm('Are you sure you want to send an SOS alert? This will immediately notify the authorities.')) {
+                    // Use localStorage to communicate with the authority dashboard
+                    // The key includes a timestamp to ensure the 'storage' event fires
+                    localStorage.setItem('SOS_ALERT', `${ticketId}_${Date.now()}`);
+                    alert('SOS Signal Sent! Help is on the way.');
+                    sosBtn.disabled = true;
+                    sosBtn.textContent = 'ALERT SENT';
+                    sosBtn.classList.remove('sos-button');
+                    sosBtn.classList.add('bg-gray-500');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
