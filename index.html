@@ -1,273 +1,368 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
+<html lang="en" class="dark"> <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Command Center - Smart Tourist Safety</title>
-
+    <title>Authority Dashboard - Smart Tourist Safety System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
-
+    
     <style>
-        /* Custom Font */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0d1117; /* GitHub Dark Background */
-            color: #c9d1d9; /* GitHub Dark Text */
-            overflow: hidden;
-        }
-
-        /* Main Layout Grid */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr; /* 2/3 for map, 1/3 for panels */
-            grid-template-rows: auto 1fr;
-            grid-template-areas:
-                "header header"
-                "map    sidebar";
-            height: 100vh;
-            gap: 1rem;
-            padding: 1rem;
-        }
-        #main-header { grid-area: header; }
-        #map-container { grid-area: map; }
-        #sidebar { grid-area: sidebar; display: flex; flex-direction: column; gap: 1rem; min-height: 0; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Roboto+Mono:wght@400;500&display=swap');
         
-        /* Glassmorphism Effect for Panels */
-        .panel {
-            background: rgba(22, 27, 34, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(48, 54, 61, 0.5);
-            border-radius: 12px;
+        body { font-family: 'Inter', sans-serif; }
+        .mono { font-family: 'Roboto Mono', monospace; }
+
+        .glass-panel { 
+            backdrop-filter: blur(12px); 
+            border-radius: 16px; 
         }
 
-        /* Custom Scrollbar for Alert List */
-        #alert-list::-webkit-scrollbar { width: 6px; }
-        #alert-list::-webkit-scrollbar-track { background: transparent; }
-        #alert-list::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        .hash-text { color: #58a6ff; word-break: break-all; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+        @keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+        .leaflet-marker-icon.sos-marker { background-color: #ef4444; border-radius: 50%; border: 2px solid white; animation: pulse-red 2s infinite; }
+        @keyframes pulse-purple { 0% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.7); } 70% { box-shadow: 0 0 0 20px rgba(168, 85, 247, 0); } 100% { box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); } }
+        .leaflet-marker-icon.track-marker { background-color: #a855f7; border-radius: 50%; border: 2px solid white; animation: pulse-purple 1.5s infinite; }
+        .leaflet-heatmap-layer { display: none; } /* Hide heatmap by default */
 
-        /* Animation for new alerts */
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        .new-alert-animation {
-            animation: slideIn 0.5s ease-out forwards;
-        }
-
-        /* SOS Pulse Animation for Map Marker */
-        @keyframes pulse-red {
-            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
-        }
-        .leaflet-marker-icon.sos-marker {
-            background-color: #ef4444;
-            border-radius: 50%;
-            border: 2px solid white;
-            animation: pulse-red 2s infinite;
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        html.light ::-webkit-scrollbar-thumb { background: #a0aec0; }
     </style>
 </head>
-<body class="w-screen h-screen">
+<body class="flex flex-col h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200 transition-colors duration-300">
+    <header class="p-4 flex-shrink-0 flex items-center justify-between">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3"><i class="fas fa-shield-halved text-cyan-500"></i> Authority Command Center</h1>
+            <p class="text-gray-500 dark:text-gray-400">Blockchain Identity Issuance & AI-Powered Monitoring</p>
+        </div>
+        <button id="theme-toggle" class="px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+            <i id="theme-icon-sun" class="fas fa-sun hidden"></i>
+            <i id="theme-icon-moon" class="fas fa-moon hidden"></i>
+        </button>
+    </header>
 
-    <div class="dashboard-grid">
-        <header id="main-header" class="panel flex items-center justify-between p-4">
-            <div class="flex items-center gap-4">
-                <i class="fas fa-shield-halved text-3xl text-cyan-400"></i>
-                <div>
-                    <h1 class="text-2xl font-bold text-white">AI Command Center</h1>
-                    <p class="text-sm text-gray-400">Smart Tourist Safety System | Location: Jaipur, Rajasthan</p>
+    <main class="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 pt-0 flex-grow min-h-0">
+        <div class="flex flex-col gap-4 overflow-y-auto">
+            <section class="glass-panel bg-white/70 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 p-6 flex flex-col">
+                <h2 class="text-xl font-bold border-b border-gray-300 dark:border-gray-700 pb-3 mb-4 flex items-center gap-3"><i class="fas fa-hammer text-yellow-500"></i>1. Mint Verifiable ID</h2>
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="text" id="touristName" value="Rohan Sharma" class="bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Tourist Name">
+                    <input type="text" id="nationality" value="Indian" class="bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Nationality">
+                    <input type="text" id="govtId" value="2345 6789 0123" class="bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Aadhaar Number">
+                    <input type="text" id="bloodGroup" value="O+" class="bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Blood Group">
                 </div>
-            </div>
-            <div id="stats-cards" class="flex gap-6 text-center">
-                <div>
-                    <p class="text-2xl font-semibold text-green-400" id="tourist-count">0</p>
-                    <p class="text-xs text-gray-400">ACTIVE TOURISTS</p>
+                <input type="text" id="emergencyContact" value="+91 98765 43210" class="w-full bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 mt-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Emergency Contact">
+                <input type="password" id="accessPasscode" value="1234" class="w-full bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 mt-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none" placeholder="Create 4-Digit Passcode" maxlength="4" pattern="\d{4}">
+                <button id="mine-btn" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 rounded-lg mt-3 flex items-center justify-center gap-2 transition-colors">
+                    <span id="mine-btn-text">Mine Verifiable ID</span><i id="mine-spinner" class="fas fa-spinner fa-spin hidden"></i>
+                </button>
+                <div id="mining-log" class="text-xs mono bg-gray-200 dark:bg-black/30 p-2 rounded-lg mt-2 h-16 overflow-y-auto"></div>
+                <div id="link-output" class="mt-2 hidden">
+                     <button id="open-link-btn" class="w-full bg-cyan-600 hover:bg-cyan-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                        <i class="fas fa-external-link-alt"></i> Open Tourist View in New Tab
+                    </button>
                 </div>
-                <div>
-                    <p class="text-2xl font-semibold text-red-500" id="alert-count">0</p>
-                    <p class="text-xs text-gray-400">ACTIVE ALERTS</p>
-                </div>
-                <div>
-                    <p class="text-2xl font-semibold text-blue-400" id="unit-count">12</p>
-                    <p class="text-xs text-gray-400">UNITS ON STANDBY</p>
-                </div>
-            </div>
-        </header>
-
-        <div id="map-container" class="panel overflow-hidden">
-            <div id="map" class="w-full h-full"></div>
+            </section>
+            
+            <section class="glass-panel bg-white/70 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 p-6 flex flex-col flex-grow">
+                 <h2 class="text-xl font-bold border-b border-gray-300 dark:border-gray-700 pb-3 mb-4 flex items-center gap-3"><i class="fas fa-user-check text-blue-500"></i>2. Checkpoint Verification</h2>
+                <input type="text" id="ticketIdInput" placeholder="Enter Verifiable ID to check..." class="w-full bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                <button id="verify-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg mt-3 transition-colors">Verify ID</button>
+                <div id="verification-result" class="mt-3 pt-3 border-t border-gray-300 dark:border-gray-700 flex-grow flex items-center justify-center text-gray-500">Awaiting verification...</div>
+            </section>
         </div>
 
-        <div id="sidebar">
-            <div id="alerts-panel" class="panel flex flex-col p-4 flex-1 min-h-0">
-                <h2 class="text-lg font-bold text-white border-b border-gray-700 pb-2 mb-2 flex items-center">
-                    <i class="fas fa-bell animate-pulse text-red-500 mr-3"></i>Live SOS Alerts
+        <section class="glass-panel lg:col-span-1 flex flex-col bg-white/70 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700">
+             <div class="p-6 pb-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h2 class="col-span-full md:col-span-3 text-xl font-bold flex items-center justify-between gap-3">
+                    <span><i class="fas fa-broadcast-tower text-red-500"></i> AI Command Center</span>
+                    <button id="toggle-heatmap-btn" class="text-xs bg-gray-300 dark:bg-gray-700 hover:bg-gray-400 dark:hover:bg-gray-600 font-bold py-1 px-3 rounded-full transition-colors">Show Heatmap</button>
                 </h2>
-                <div id="alert-list" class="flex-1 overflow-y-auto space-y-3 pr-2">
-                    <div id="no-alerts-placeholder" class="h-full flex items-center justify-center text-gray-500">
-                        <p>Monitoring for alerts...</p>
-                    </div>
-                </div>
-            </div>
+                <div class="text-center"><p class="text-2xl font-semibold text-green-600 dark:text-green-400" id="tourist-count">0</p><p class="text-xs text-gray-500 dark:text-gray-400">VERIFIED TOURISTS</p></div>
+                <div class="text-center"><p class="text-2xl font-semibold text-red-600 dark:text-red-500" id="alert-count">0</p><p class="text-xs text-gray-500 dark:text-gray-400">ACTIVE ALERTS</p></div>
+                <div class="text-center"><div id="chain-status" class="text-sm"></div></div>
+             </div>
+             <div class="flex-grow p-4 pt-2 flex flex-col gap-4 min-h-0">
+                 <div id="map-container" class="flex-grow rounded-lg overflow-hidden border border-gray-300 dark:border-gray-700 h-96 lg:h-full w-full">
+                    <div id="map" class="w-full h-full"></div>
+                 </div>
+                 <div id="ai-response" class="bg-white/70 dark:bg-gray-800/80 p-4 rounded-lg border border-gray-300 dark:border-gray-700 hidden"></div>
+             </div>
+        </section>
 
-            <div id="ai-response-panel" class="panel flex flex-col p-4 flex-1">
-                <h2 class="text-lg font-bold text-white border-b border-gray-700 pb-2 mb-3 flex items-center">
-                    <i class="fas fa-robot text-cyan-400 mr-3"></i>AI-Generated Response
-                </h2>
-                <div id="ai-response-content" class="text-sm text-gray-300">
-                    <p class="text-gray-500 text-center italic mt-4">Select an alert to view AI response plan.</p>
-                </div>
-            </div>
+        <div class="flex flex-col gap-4 overflow-y-auto">
+            <section class="glass-panel bg-white/70 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 p-6 flex flex-col flex-grow">
+                 <h2 class="text-xl font-bold border-b border-gray-300 dark:border-gray-700 pb-3 mb-4 flex items-center gap-3"><i class="fas fa-crosshairs text-purple-500"></i>3. Live Location Tracking</h2>
+                <input type="text" id="trackTicketId" placeholder="Enter Verifiable ID..." class="w-full bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 focus:ring-2 focus:ring-cyan-500 focus:outline-none">
+                <input type="password" id="trackPasscode" placeholder="Enter 4-Digit Passcode..." class="w-full bg-gray-200 dark:bg-gray-900 border-gray-300 dark:border-gray-600 rounded p-2 mt-3 focus:ring-2 focus:ring-cyan-500 focus:outline-none" maxlength="4">
+                <button id="track-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg mt-3 transition-colors">Track Tourist</button>
+                <div id="track-result" class="mt-3 pt-3 border-t border-gray-300 dark:border-gray-700 flex-grow flex items-center justify-center text-gray-500 text-sm mono">Awaiting tracking request...</div>
+            </section>
+            
+            <section class="glass-panel bg-white/70 dark:bg-gray-800/80 border border-gray-300 dark:border-gray-700 p-6 flex flex-col h-1/2">
+                <h2 class="text-xl font-bold border-b border-gray-300 dark:border-gray-700 pb-3 mb-4 flex items-center gap-3"><i class="fas fa-link text-green-500"></i>Blockchain Explorer</h2>
+                <div id="blockchain-explorer" class="flex-grow overflow-y-auto pr-2"></div>
+            </section>
         </div>
-    </div>
+    </main>
+    
+    <script>
+        // --- 0. THEME TOGGLE LOGIC ---
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const sunIcon = document.getElementById('theme-icon-sun');
+        const moonIcon = document.getElementById('theme-icon-moon');
+        const docElement = document.documentElement;
+        let map; // Declare map globally
 
-<script>
-    // --- 1. MOCK DATA & CONFIGURATION ---
-    const jaipurCenter = [26.9124, 75.7873];
-    const touristData = [
-        { id: 'T001', name: 'Priya Sharma', age: 28, nationality: 'Indian', location: [26.9239, 75.7788], phone: '+919876543210' },
-        { id: 'T002', name: 'John Smith', age: 45, nationality: 'American', location: [26.9124, 75.7873], phone: '+12025550104' },
-        { id: 'T003', name: 'Yuki Tanaka', age: 34, nationality: 'Japanese', location: [26.9055, 75.7918], phone: '+818012345678' },
-        { id: 'T004', name: 'Aarav Patel', age: 22, nationality: 'Indian', location: [26.9175, 75.7905], phone: '+919988776655' },
-        { id: 'T005', name: 'Maria Garcia', age: 52, nationality: 'Spanish', location: [26.9220, 75.7787], phone: '+34600123456' }
-    ];
-    const policeUnits = [
-        { id: 'U01', name: 'Alpha Unit', location: [26.9150, 75.7800] },
-        { id: 'U02', name: 'Bravo Unit', location: [26.9250, 75.7900] },
-        { id: 'U03', name: 'Charlie Unit', location: [26.9000, 75.7750] }
-    ];
-    let touristMarkers = {};
-    let activeAlerts = 0;
+        function setMapTheme(theme) {
+            if (!map) return;
+            map.eachLayer(layer => {
+                if (layer instanceof L.TileLayer) map.removeLayer(layer);
+            });
+            const tileUrl = theme === 'dark' 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            L.tileLayer(tileUrl, { attribution: '&copy; CARTO' }).addTo(map);
+        }
 
-    // --- 2. INITIALIZE MAP ---
-    const map = L.map('map').setView(jaipurCenter, 13);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        subdomains: 'abcd',
-        maxZoom: 20
-    }).addTo(map);
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                docElement.classList.add('dark');
+                moonIcon.classList.remove('hidden');
+                sunIcon.classList.add('hidden');
+            } else {
+                docElement.classList.remove('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            }
+            localStorage.setItem('theme', theme);
+            setMapTheme(theme);
+        }
 
-    const heatLayer = L.heatLayer([], { radius: 25, blur: 15, maxZoom: 17, gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'} }).addTo(map);
+        themeToggleBtn.addEventListener('click', () => {
+            const newTheme = docElement.classList.contains('dark') ? 'light' : 'dark';
+            applyTheme(newTheme);
+        });
 
-    // --- 3. UI & MAP FUNCTIONS ---
+        // --- 1. BLOCKCHAIN CORE ---
+        class Block {
+            constructor(index, timestamp, data, previousHash = '') { this.index = index; this.timestamp = timestamp; this.data = data; this.previousHash = previousHash; this.hash = ''; this.nonce = 0; }
+            async calculateHash() { const dataString = this.index + this.previousHash + this.timestamp + JSON.stringify(this.data) + this.nonce; const encoder = new TextEncoder(); const data = encoder.encode(dataString); const hashBuffer = await crypto.subtle.digest('SHA-256', data); const hashArray = Array.from(new Uint8Array(hashBuffer)); return hashArray.map(b => b.toString(16).padStart(2, '0')).join(''); }
+            async mineBlock(difficulty) { const target = Array(difficulty + 1).join("0"); let hash = await this.calculateHash(); while (hash.substring(0, difficulty) !== target) { this.nonce++; hash = await this.calculateHash(); } this.hash = hash; }
+        }
+        class Blockchain {
+            constructor(difficulty = 3) { this.chain = []; this.difficulty = difficulty; }
+            async init() { 
+                const chainData = localStorage.getItem('touristChain');
+                if (chainData) {
+                    this.chain = JSON.parse(chainData);
+                    return;
+                }
+                const genesisBlock = await this.createGenesisBlock(); this.chain.push(genesisBlock); this.save(); 
+            }
+            async createGenesisBlock() { const genesis = new Block(0, Date.now(), { ticketId: 'GENESIS_BLOCK', tourist: 'System Genesis', location: [0,0] }, "0"); genesis.hash = await genesis.calculateHash(); return genesis; }
+            getLatestBlock() { return this.chain[this.chain.length - 1]; }
+            async addBlock(newBlock) { newBlock.previousHash = this.getLatestBlock().hash; await newBlock.mineBlock(this.difficulty); this.chain.push(newBlock); this.save(); }
+            
+            // CRITICAL FIX HERE
+            async isChainValid() {
+                for (let i = 1; i < this.chain.length; i++) {
+                    const blockData = this.chain[i];
+                    const prevBlockData = this.chain[i-1];
+                    
+                    // Re-instantiate the block to get its methods back
+                    const currentBlock = new Block();
+                    Object.assign(currentBlock, blockData);
 
-    // Function to calculate distance (simple approximation)
-    const getDistance = (loc1, loc2) => {
-        return Math.sqrt(Math.pow(loc1[0] - loc2[0], 2) + Math.pow(loc1[1] - loc2[1], 2));
-    }
+                    if (currentBlock.hash !== await currentBlock.calculateHash()) return false;
+                    if (currentBlock.previousHash !== prevBlockData.hash) return false;
+                }
+                return true;
+            }
+            save() { localStorage.setItem('touristChain', JSON.stringify(this.chain)); }
+        }
 
-    // AI Function to find the nearest police unit
-    const findNearestUnit = (touristLocation) => {
-        let nearestUnit = null;
-        let minDistance = Infinity;
-        policeUnits.forEach(unit => {
-            const distance = getDistance(touristLocation, unit.location);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestUnit = unit;
+        // --- 2. MAP & AI CORE ---
+        const jaipurCenter = [26.9124, 75.7873];
+        let touristMarkers = {};
+        let trackingMarker = null;
+        let isHeatmapVisible = false;
+        let heatLayer;
+
+        function initializeMap() {
+            map = L.map('map').setView(jaipurCenter, 13);
+            heatLayer = L.heatLayer([], { radius: 25, blur: 15, maxZoom: 17, gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'} }).addTo(map);
+            const initialTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            applyTheme(initialTheme);
+        }
+        
+        function triggerSOS(ticketId) {
+            const block = touristChain.chain.find(b => b.data.ticketId === ticketId);
+            if (!block || !touristMarkers[ticketId]) return;
+            const tourist = block.data;
+            if (trackingMarker) { trackingMarker.remove(); trackingMarker = null; }
+            touristMarkers[ticketId].setIcon(L.divIcon({ className: 'sos-marker', iconSize: [20, 20] }));
+            document.getElementById('alert-count').textContent = parseInt(document.getElementById('alert-count').textContent) + 1;
+            
+            const aiResponseDiv = document.getElementById('ai-response');
+            aiResponseDiv.classList.remove('hidden');
+            aiResponseDiv.innerHTML = `<div class="fade-in bg-red-900/50 p-3 rounded-lg border border-red-700 h-full"><p class="font-bold text-red-400 text-base">AI Incident Ticket</p><div class="mt-2 border-t border-red-800 pt-2 mono text-xs space-y-1"><p><strong class="text-gray-400">Tourist:</strong> ${tourist.tourist}</p><p><strong class="text-gray-400">Blood Grp:</strong> ${tourist.bloodGroup}</p><p><strong class="text-gray-400">Verified ID:</strong> ${tourist.ticketId}</p><p><strong class="text-gray-400">Contact:</strong> ${tourist.emergencyContact}</p><p class="mt-2 font-bold text-cyan-300">AI Action: Unit Dispatched.</p></div></div>`;
+            map.setView(tourist.location, 16);
+        }
+
+        // --- 3. INTEGRATED APPLICATION LOGIC ---
+        let touristChain = new Blockchain(3);
+        
+        async function initializeApp() {
+            initializeMap();
+            await touristChain.init();
+            if (touristChain.chain.length === 1) await addInitialData();
+            updateUI();
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'SOS_ALERT' && e.newValue) { 
+                    const ticketId = e.newValue.split('_')[0];
+                    triggerSOS(ticketId); 
+                }
+                if (e.key === 'touristChain') { 
+                    touristChain.chain = JSON.parse(e.newValue); 
+                    updateUI(); 
+                }
+            });
+        }
+        
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+        async function addInitialData(){
+             const initialBlockData = { ticketId: 'TKT-PRELOAD', tourist: 'Priya Singh', nationality: 'Indian', govtIdHash: 'HASH(123456789012)', bloodGroup: 'A+', emergencyContact: '+919988776655', location: [26.9239, 75.7788], passcode: '9876' };
+             const initialBlock = new Block(1, Date.now(), initialBlockData);
+             await touristChain.addBlock(initialBlock);
+        }
+
+        function updateUI() { updateBlockchainExplorer(); validateChain(); updateMap(); }
+
+        async function validateChain() { 
+            const chainStatusDiv = document.getElementById('chain-status');
+            const isValid = await touristChain.isChainValid(); 
+            chainStatusDiv.innerHTML = isValid ? `<p class="mono text-green-600 dark:text-green-400 font-bold">CHAIN: VALID</p>` : `<p class="mono text-red-600 dark:text-red-500 font-bold animate-pulse">CHAIN: INVALID!</p>`; 
+        }
+        
+        function updateBlockchainExplorer() {
+            const explorer = document.getElementById('blockchain-explorer');
+            explorer.innerHTML = '';
+            [...touristChain.chain].slice(1).reverse().forEach(block => {
+                explorer.innerHTML += `<div class="text-xs mono p-2 border-b border-gray-300 dark:border-gray-700"><p class="text-yellow-600 dark:text-yellow-300">${block.data.ticketId}</p><p class="text-gray-600 dark:text-gray-400">${block.data.tourist}</p></div>`;
+            });
+        }
+
+        function updateMap() {
+             const heatPoints = [];
+             Object.values(touristMarkers).forEach(marker => marker.remove());
+             touristMarkers = {};
+             touristChain.chain.forEach(block => {
+                if (block.index > 0) {
+                    const tourist = block.data;
+                    heatPoints.push([...tourist.location, 1]);
+                    const icon = L.divIcon({ className: 'flex items-center justify-center bg-green-500 rounded-full border-2 border-white', html: `<i class="fas fa-user text-white text-xs"></i>`, iconSize: [20, 20] });
+                    const marker = L.marker(tourist.location, { icon }).addTo(map);
+                    marker.bindPopup(`<b>${tourist.tourist}</b><br>ID: ${tourist.ticketId}`);
+                    touristMarkers[tourist.ticketId] = marker;
+                }
+             });
+             heatLayer.setLatLngs(heatPoints);
+             document.getElementById('tourist-count').textContent = touristChain.chain.length - 1;
+        }
+        
+        document.getElementById('mine-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('mine-btn');
+            const btnText = document.getElementById('mine-btn-text');
+            const spinner = document.getElementById('mine-spinner');
+            const log = document.getElementById('mining-log');
+            const passcode = document.getElementById('accessPasscode').value;
+
+            if (!/^\d{4}$/.test(passcode)) {
+                alert('Passcode must be exactly 4 digits.'); return;
+            }
+
+            btn.disabled = true; btnText.textContent = 'Mining...'; spinner.classList.remove('hidden');
+            log.innerHTML = `<p class="text-yellow-600 dark:text-yellow-400">Mining block...</p>`;
+            document.getElementById('link-output').classList.add('hidden');
+            await new Promise(res => setTimeout(res, 50));
+
+            const randomLocation = [jaipurCenter[0] + (Math.random() - 0.5) * 0.05, jaipurCenter[1] + (Math.random() - 0.5) * 0.05];
+            const newBlockData = { 
+                ticketId: `TKT-${Date.now().toString().slice(-6)}`, 
+                tourist: document.getElementById('touristName').value, 
+                nationality: document.getElementById('nationality').value,
+                govtIdHash: `HASH(${document.getElementById('govtId').value})`, 
+                bloodGroup: document.getElementById('bloodGroup').value,
+                emergencyContact: document.getElementById('emergencyContact').value,
+                location: randomLocation,
+                passcode: passcode 
+            };
+            const newBlock = new Block(touristChain.getLatestBlock().index + 1, Date.now(), newBlockData);
+            await touristChain.addBlock(newBlock);
+
+            log.innerHTML = `<p class="text-green-600 dark:text-green-400 font-bold">Block Mined Successfully!</p>`;
+            
+            const touristViewUrl = `tourist_view.html?ticketId=${newBlock.data.ticketId}`;
+            const linkOutput = document.getElementById('link-output');
+            const openLinkBtn = document.getElementById('open-link-btn');
+            openLinkBtn.onclick = () => { window.open(touristViewUrl, '_blank'); };
+            linkOutput.classList.remove('hidden');
+            updateUI();
+            btn.disabled = false; btnText.textContent = 'Mine Verifiable ID'; spinner.classList.add('hidden');
+        });
+
+        document.getElementById('verify-btn').addEventListener('click', () => {
+            const ticketId = document.getElementById('ticketIdInput').value; const resultDiv = document.getElementById('verification-result'); if (!ticketId) return;
+            const foundBlock = touristChain.chain.find(block => block.data.ticketId === ticketId);
+            if (foundBlock) { resultDiv.innerHTML = `<div class="text-center fade-in"><i class="fas fa-check-circle text-5xl text-green-500 dark:text-green-400 mb-2"></i><p class="font-bold text-green-600 dark:text-green-300 text-xl">ID VALID</p><div class="text-left text-sm mono mt-4 bg-gray-200 dark:bg-black/30 p-3 rounded-lg"><p><strong>Tourist:</strong> ${foundBlock.data.tourist}</p><p><strong>Block #:</strong> ${foundBlock.index}</p></div></div>`; } 
+            else { resultDiv.innerHTML = `<div class="text-center fade-in"><i class="fas fa-exclamation-triangle text-5xl text-red-600 dark:text-red-500 mb-2"></i><p class="font-bold text-red-700 dark:text-red-400 text-xl">ID INVALID</p></div>`; }
+        });
+
+        document.getElementById('track-btn').addEventListener('click', () => {
+            const ticketId = document.getElementById('trackTicketId').value;
+            const passcode = document.getElementById('trackPasscode').value;
+            const resultDiv = document.getElementById('track-result');
+            
+            if (!ticketId || !passcode) {
+                resultDiv.innerHTML = '<p class="text-yellow-500">Please provide both ID and Passcode.</p>'; return;
+            }
+            
+            const block = touristChain.chain.find(b => b.data.ticketId === ticketId);
+
+            if (block && block.data.passcode === passcode) {
+                if(trackingMarker) { trackingMarker.remove(); }
+                const trackIcon = L.divIcon({ className: 'track-marker', iconSize: [20, 20] });
+                trackingMarker = L.marker(block.data.location, { icon: trackIcon }).addTo(map);
+                map.setView(block.data.location, 17);
+                resultDiv.innerHTML = `<p class="text-green-600 dark:text-green-400">Verification successful!<br>Tracking ${block.data.tourist}.</p>`;
+            } else {
+                resultDiv.innerHTML = '<p class="text-red-600 dark:text-red-400">Verification Failed. Invalid ID or Passcode.</p>';
             }
         });
-        return nearestUnit;
-    };
 
-    // Displays the AI-generated response plan for a selected alert
-    const displayAIResponse = (tourist) => {
-        const nearestUnit = findNearestUnit(tourist.location);
-        const content = document.getElementById('ai-response-content');
-        content.innerHTML = `
-            <div class="space-y-3">
-                <div>
-                    <p class="font-semibold text-white">Tourist Details:</p>
-                    <p><i class="fas fa-user mr-2 text-gray-400"></i> ${tourist.name}, ${tourist.age} (${tourist.nationality})</p>
-                    <p><i class="fas fa-phone mr-2 text-gray-400"></i> ${tourist.phone}</p>
-                    <p><i class="fas fa-map-marker-alt mr-2 text-gray-400"></i> Lat: ${tourist.location[0].toFixed(4)}, Lng: ${tourist.location[1].toFixed(4)}</p>
-                </div>
-                <div class="p-3 bg-cyan-900/50 rounded-lg">
-                    <p class="font-bold text-cyan-300">AI Recommendation:</p>
-                    <p><i class="fas fa-car-side mr-2 text-gray-400"></i> Dispatch **${nearestUnit.name}** (Nearest unit)</p>
-                </div>
-                <div>
-                    <p class="font-semibold text-white">Action: Automated E-FIR</p>
-                    <textarea class="w-full bg-gray-900/70 border border-gray-600 rounded-md mt-1 p-2 text-xs" rows="3" readonly>SOS Alert from ${tourist.name} (ID: ${tourist.id}) at ${new Date().toLocaleTimeString()}. Location: ${tourist.location}. Suspected distress. Acknowledged by AI system. Unit ${nearestUnit.name} dispatched.</textarea>
-                </div>
-            </div>`;
-    };
+        document.getElementById('toggle-heatmap-btn').addEventListener('click', (e) => {
+            isHeatmapVisible = !isHeatmapVisible;
+            const markerPane = document.querySelector('.leaflet-marker-pane');
+            const heatmapCanvas = document.querySelector('.leaflet-heatmap-layer');
 
-    // Adds a new alert to the live alerts list
-    const addAlertToList = (tourist) => {
-        document.getElementById('no-alerts-placeholder')?.remove();
-        const alertList = document.getElementById('alert-list');
-        const alertDiv = document.createElement('div');
-        alertDiv.className = 'p-3 bg-red-900/50 rounded-lg cursor-pointer hover:bg-red-900/80 transition-all new-alert-animation';
-        alertDiv.innerHTML = `
-            <p class="font-bold text-red-400">${tourist.name} - SOS</p>
-            <p class="text-xs text-gray-400">Location: Near Hawa Mahal</p>
-        `;
-        alertDiv.onclick = () => {
-            displayAIResponse(tourist);
-            map.setView(tourist.location, 16);
-        };
-        alertList.prepend(alertDiv);
-        activeAlerts++;
-        document.getElementById('alert-count').textContent = activeAlerts;
-    };
-
-    // Function to trigger a simulated SOS alert for a tourist
-    const triggerSOS = (touristId) => {
-        const tourist = touristData.find(t => t.id === touristId);
-        if (tourist && touristMarkers[touristId]) {
-            // Update marker to show SOS
-            touristMarkers[touristId].setIcon(L.divIcon({
-                className: 'sos-marker',
-                iconSize: [20, 20]
-            }));
-            // Add alert to list and display AI response
-            addAlertToList(tourist);
-            displayAIResponse(tourist);
-            map.setView(tourist.location, 16); // Center map on the alert
-        }
-    };
-    
-    // Renders initial tourist markers on the map
-    const renderTourists = () => {
-        const heatPoints = [];
-        touristData.forEach(tourist => {
-            // Add point to heatmap data
-            heatPoints.push([...tourist.location, 0.8]); // [lat, lng, intensity]
-
-            const icon = L.divIcon({
-                className: 'flex items-center justify-center bg-green-500 rounded-full border-2 border-white',
-                html: `<i class="fas fa-user text-white text-xs"></i>`,
-                iconSize: [20, 20]
-            });
-            const marker = L.marker(tourist.location, { icon: icon }).addTo(map);
-            marker.bindPopup(`<b>${tourist.name}</b><br>${tourist.nationality}`);
-            touristMarkers[tourist.id] = marker;
+            if (isHeatmapVisible) {
+                markerPane.style.display = 'none';
+                heatmapCanvas.style.display = 'block';
+                e.target.textContent = 'Show Markers';
+            } else {
+                markerPane.style.display = 'block';
+                heatmapCanvas.style.display = 'none';
+                e.target.textContent = 'Show Heatmap';
+            }
         });
-        heatLayer.setLatLngs(heatPoints);
-        document.getElementById('tourist-count').textContent = touristData.length;
-    };
-
-    // --- 4. RUN SIMULATION ---
-    document.addEventListener('DOMContentLoaded', () => {
-        renderTourists();
-
-        // Simulate SOS alerts after a delay for dramatic effect
-        setTimeout(() => {
-            triggerSOS('T001'); // Priya Sharma sends an SOS
-        }, 5000); // 5 seconds after load
-
-        setTimeout(() => {
-            triggerSOS('T004'); // Aarav Patel sends an SOS
-        }, 12000); // 12 seconds after load
-    });
-
-</script>
+    </script>
 </body>
 </html>
