@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Command Center - Smart Tourist Safety</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+
+    <style>
+        /* Custom Font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0d1117; /* GitHub Dark Background */
+            color: #c9d1d9; /* GitHub Dark Text */
+            overflow: hidden;
+        }
+
+        /* Main Layout Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr; /* 2/3 for map, 1/3 for panels */
+            grid-template-rows: auto 1fr;
+            grid-template-areas:
+                "header header"
+                "map    sidebar";
+            height: 100vh;
+            gap: 1rem;
+            padding: 1rem;
+        }
+        #main-header { grid-area: header; }
+        #map-container { grid-area: map; }
+        #sidebar { grid-area: sidebar; display: flex; flex-direction: column; gap: 1rem; min-height: 0; }
+        
+        /* Glassmorphism Effect for Panels */
+        .panel {
+            background: rgba(22, 27, 34, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(48, 54, 61, 0.5);
+            border-radius: 12px;
+        }
+
+        /* Custom Scrollbar for Alert List */
+        #alert-list::-webkit-scrollbar { width: 6px; }
+        #alert-list::-webkit-scrollbar-track { background: transparent; }
+        #alert-list::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+
+        /* Animation for new alerts */
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .new-alert-animation {
+            animation: slideIn 0.5s ease-out forwards;
+        }
+
+        /* SOS Pulse Animation for Map Marker */
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .leaflet-marker-icon.sos-marker {
+            background-color: #ef4444;
+            border-radius: 50%;
+            border: 2px solid white;
+            animation: pulse-red 2s infinite;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen">
+
+    <div class="dashboard-grid">
+        <header id="main-header" class="panel flex items-center justify-between p-4">
+            <div class="flex items-center gap-4">
+                <i class="fas fa-shield-halved text-3xl text-cyan-400"></i>
+                <div>
+                    <h1 class="text-2xl font-bold text-white">AI Command Center</h1>
+                    <p class="text-sm text-gray-400">Smart Tourist Safety System | Location: Jaipur, Rajasthan</p>
+                </div>
+            </div>
+            <div id="stats-cards" class="flex gap-6 text-center">
+                <div>
+                    <p class="text-2xl font-semibold text-green-400" id="tourist-count">0</p>
+                    <p class="text-xs text-gray-400">ACTIVE TOURISTS</p>
+                </div>
+                <div>
+                    <p class="text-2xl font-semibold text-red-500" id="alert-count">0</p>
+                    <p class="text-xs text-gray-400">ACTIVE ALERTS</p>
+                </div>
+                <div>
+                    <p class="text-2xl font-semibold text-blue-400" id="unit-count">12</p>
+                    <p class="text-xs text-gray-400">UNITS ON STANDBY</p>
+                </div>
+            </div>
+        </header>
+
+        <div id="map-container" class="panel overflow-hidden">
+            <div id="map" class="w-full h-full"></div>
+        </div>
+
+        <div id="sidebar">
+            <div id="alerts-panel" class="panel flex flex-col p-4 flex-1 min-h-0">
+                <h2 class="text-lg font-bold text-white border-b border-gray-700 pb-2 mb-2 flex items-center">
+                    <i class="fas fa-bell animate-pulse text-red-500 mr-3"></i>Live SOS Alerts
+                </h2>
+                <div id="alert-list" class="flex-1 overflow-y-auto space-y-3 pr-2">
+                    <div id="no-alerts-placeholder" class="h-full flex items-center justify-center text-gray-500">
+                        <p>Monitoring for alerts...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="ai-response-panel" class="panel flex flex-col p-4 flex-1">
+                <h2 class="text-lg font-bold text-white border-b border-gray-700 pb-2 mb-3 flex items-center">
+                    <i class="fas fa-robot text-cyan-400 mr-3"></i>AI-Generated Response
+                </h2>
+                <div id="ai-response-content" class="text-sm text-gray-300">
+                    <p class="text-gray-500 text-center italic mt-4">Select an alert to view AI response plan.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- 1. MOCK DATA & CONFIGURATION ---
+    const jaipurCenter = [26.9124, 75.7873];
+    const touristData = [
+        { id: 'T001', name: 'Priya Sharma', age: 28, nationality: 'Indian', location: [26.9239, 75.7788], phone: '+919876543210' },
+        { id: 'T002', name: 'John Smith', age: 45, nationality: 'American', location: [26.9124, 75.7873], phone: '+12025550104' },
+        { id: 'T003', name: 'Yuki Tanaka', age: 34, nationality: 'Japanese', location: [26.9055, 75.7918], phone: '+818012345678' },
+        { id: 'T004', name: 'Aarav Patel', age: 22, nationality: 'Indian', location: [26.9175, 75.7905], phone: '+919988776655' },
+        { id: 'T005', name: 'Maria Garcia', age: 52, nationality: 'Spanish', location: [26.9220, 75.7787], phone: '+34600123456' }
+    ];
+    const policeUnits = [
+        { id: 'U01', name: 'Alpha Unit', location: [26.9150, 75.7800] },
+        { id: 'U02', name: 'Bravo Unit', location: [26.9250, 75.7900] },
+        { id: 'U03', name: 'Charlie Unit', location: [26.9000, 75.7750] }
+    ];
+    let touristMarkers = {};
+    let activeAlerts = 0;
+
+    // --- 2. INITIALIZE MAP ---
+    const map = L.map('map').setView(jaipurCenter, 13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        subdomains: 'abcd',
+        maxZoom: 20
+    }).addTo(map);
+
+    const heatLayer = L.heatLayer([], { radius: 25, blur: 15, maxZoom: 17, gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'} }).addTo(map);
+
+    // --- 3. UI & MAP FUNCTIONS ---
+
+    // Function to calculate distance (simple approximation)
+    const getDistance = (loc1, loc2) => {
+        return Math.sqrt(Math.pow(loc1[0] - loc2[0], 2) + Math.pow(loc1[1] - loc2[1], 2));
+    }
+
+    // AI Function to find the nearest police unit
+    const findNearestUnit = (touristLocation) => {
+        let nearestUnit = null;
+        let minDistance = Infinity;
+        policeUnits.forEach(unit => {
+            const distance = getDistance(touristLocation, unit.location);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestUnit = unit;
+            }
+        });
+        return nearestUnit;
+    };
+
+    // Displays the AI-generated response plan for a selected alert
+    const displayAIResponse = (tourist) => {
+        const nearestUnit = findNearestUnit(tourist.location);
+        const content = document.getElementById('ai-response-content');
+        content.innerHTML = `
+            <div class="space-y-3">
+                <div>
+                    <p class="font-semibold text-white">Tourist Details:</p>
+                    <p><i class="fas fa-user mr-2 text-gray-400"></i> ${tourist.name}, ${tourist.age} (${tourist.nationality})</p>
+                    <p><i class="fas fa-phone mr-2 text-gray-400"></i> ${tourist.phone}</p>
+                    <p><i class="fas fa-map-marker-alt mr-2 text-gray-400"></i> Lat: ${tourist.location[0].toFixed(4)}, Lng: ${tourist.location[1].toFixed(4)}</p>
+                </div>
+                <div class="p-3 bg-cyan-900/50 rounded-lg">
+                    <p class="font-bold text-cyan-300">AI Recommendation:</p>
+                    <p><i class="fas fa-car-side mr-2 text-gray-400"></i> Dispatch **${nearestUnit.name}** (Nearest unit)</p>
+                </div>
+                <div>
+                    <p class="font-semibold text-white">Action: Automated E-FIR</p>
+                    <textarea class="w-full bg-gray-900/70 border border-gray-600 rounded-md mt-1 p-2 text-xs" rows="3" readonly>SOS Alert from ${tourist.name} (ID: ${tourist.id}) at ${new Date().toLocaleTimeString()}. Location: ${tourist.location}. Suspected distress. Acknowledged by AI system. Unit ${nearestUnit.name} dispatched.</textarea>
+                </div>
+            </div>`;
+    };
+
+    // Adds a new alert to the live alerts list
+    const addAlertToList = (tourist) => {
+        document.getElementById('no-alerts-placeholder')?.remove();
+        const alertList = document.getElementById('alert-list');
+        const alertDiv = document.createElement('div');
+        alertDiv.className = 'p-3 bg-red-900/50 rounded-lg cursor-pointer hover:bg-red-900/80 transition-all new-alert-animation';
+        alertDiv.innerHTML = `
+            <p class="font-bold text-red-400">${tourist.name} - SOS</p>
+            <p class="text-xs text-gray-400">Location: Near Hawa Mahal</p>
+        `;
+        alertDiv.onclick = () => {
+            displayAIResponse(tourist);
+            map.setView(tourist.location, 16);
+        };
+        alertList.prepend(alertDiv);
+        activeAlerts++;
+        document.getElementById('alert-count').textContent = activeAlerts;
+    };
+
+    // Function to trigger a simulated SOS alert for a tourist
+    const triggerSOS = (touristId) => {
+        const tourist = touristData.find(t => t.id === touristId);
+        if (tourist && touristMarkers[touristId]) {
+            // Update marker to show SOS
+            touristMarkers[touristId].setIcon(L.divIcon({
+                className: 'sos-marker',
+                iconSize: [20, 20]
+            }));
+            // Add alert to list and display AI response
+            addAlertToList(tourist);
+            displayAIResponse(tourist);
+            map.setView(tourist.location, 16); // Center map on the alert
+        }
+    };
+    
+    // Renders initial tourist markers on the map
+    const renderTourists = () => {
+        const heatPoints = [];
+        touristData.forEach(tourist => {
+            // Add point to heatmap data
+            heatPoints.push([...tourist.location, 0.8]); // [lat, lng, intensity]
+
+            const icon = L.divIcon({
+                className: 'flex items-center justify-center bg-green-500 rounded-full border-2 border-white',
+                html: `<i class="fas fa-user text-white text-xs"></i>`,
+                iconSize: [20, 20]
+            });
+            const marker = L.marker(tourist.location, { icon: icon }).addTo(map);
+            marker.bindPopup(`<b>${tourist.name}</b><br>${tourist.nationality}`);
+            touristMarkers[tourist.id] = marker;
+        });
+        heatLayer.setLatLngs(heatPoints);
+        document.getElementById('tourist-count').textContent = touristData.length;
+    };
+
+    // --- 4. RUN SIMULATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        renderTourists();
+
+        // Simulate SOS alerts after a delay for dramatic effect
+        setTimeout(() => {
+            triggerSOS('T001'); // Priya Sharma sends an SOS
+        }, 5000); // 5 seconds after load
+
+        setTimeout(() => {
+            triggerSOS('T004'); // Aarav Patel sends an SOS
+        }, 12000); // 12 seconds after load
+    });
+
+</script>
+</body>
+</html>
